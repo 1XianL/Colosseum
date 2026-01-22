@@ -10,8 +10,10 @@
 
 // ctor
 UnrealLidarSensor::UnrealLidarSensor(const AirSimSettings::LidarSetting& setting,
-                                     AActor* actor, const NedTransform* ned_transform)
-    : LidarSimple(setting), actor_(actor), ned_transform_(ned_transform)
+    //                                  AActor* actor, const NedTransform* ned_transform)
+    // : LidarSimple(setting), actor_(actor), ned_transform_(ned_transform)
+                                     AActor* actor, const NedTransform* ned_transform, const std::string& vehicle_type)
+    : LidarSimple(vehicle_type, setting), actor_(actor), ned_transform_(ned_transform)
 {
     createLasers();
 }
@@ -98,7 +100,7 @@ void UnrealLidarSensor::getPointCloud(const msr::airlib::Pose& lidar_pose, const
         }
     });
 
-    // erase–remove idiom to handle non-valid elements
+    // eraseï¿½remove idiom to handle non-valid elements
     point_cloud.erase(std::remove(point_cloud.begin(), point_cloud.end(), FLT_MAX), point_cloud.end());
     segmentation_cloud.erase(std::remove(segmentation_cloud.begin(), segmentation_cloud.end(), -1), segmentation_cloud.end());
 

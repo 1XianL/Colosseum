@@ -48,7 +48,8 @@ protected:
 
 private:
     void initializeSubWindows();
-    void createSimMode();
+    // void createSimMode();
+    void createAllSimModes();
     void initializeSettings();
     void setUnrealEngineSettings();
     void loadLevel();
@@ -70,7 +71,8 @@ private:
     UPROPERTY()
     USimHUDWidget* widget_;
     UPROPERTY()
-    ASimModeBase* simmode_;
+    // ASimModeBase* simmode_;
+    TArray<ASimModeBase*> simmodes_;
 
     APIPCamera* subwindow_cameras_[AirSimSettings::kSubwindowCount];
     bool map_changed_;

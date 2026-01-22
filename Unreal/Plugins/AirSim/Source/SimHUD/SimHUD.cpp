@@ -29,11 +29,15 @@ void ASimHUD::BeginPlay()
         if (map_changed_) return;
 
         setUnrealEngineSettings();
-        createSimMode();
+        // createSimMode();
+        createAllSimModes();
         createMainWidget();
         setupInputBindings();
-        if (simmode_)
-            simmode_->startApiServer();
+        // if (simmode_)
+        //     simmode_->startApiServer();
+        for (auto simmode : simmodes_) {
+            simmode->startApiServer();
+        }
     }
     catch (std::exception& ex) {
         UAirBlueprintLib::LogMessageString("Error at startup: ", ex.what(), LogDebugLevel::Failure);
@@ -45,22 +49,33 @@ void ASimHUD::BeginPlay()
 
 void ASimHUD::Tick(float DeltaSeconds)
 {
-    if (simmode_ && simmode_->EnableReport)
-        widget_->updateDebugReport(simmode_->getDebugReport());
+    // if (simmode_ && simmode_->EnableReport)
+    //     widget_->updateDebugReport(simmode_->getDebugReport());
+    for (auto simmode : simmodes_) {
+        if (simmode && simmode->EnableReport)
+            widget_->updateDebugReport(simmode->getDebugReport());
+    }
 }
 
 void ASimHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    if (simmode_)
-        simmode_->stopApiServer();
+    // if (simmode_)
+    //     simmode_->stopApiServer();
+    for (auto simmode : simmodes_) {
+        simmode->stopApiServer();
+    }
 
     if (widget_) {
         widget_->Destruct();
         widget_ = nullptr;
     }
-    if (simmode_) {
-        simmode_->Destroy();
-        simmode_ = nullptr;
+    // if (simmode_) {
+    //     simmode_->Destroy();
+    //     simmode_ = nullptr;
+    // }
+    for (auto& simmode : simmodes_) {
+        simmode->Destroy();
+        simmode = nullptr;
     }
 
     UAirBlueprintLib::OnEndPlay();
@@ -70,7 +85,12 @@ void ASimHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ASimHUD::toggleRecordHandler()
 {
-    simmode_->toggleRecording();
+    // simmode_->toggleRecording();
+    for (auto simmode : simmodes_) {
+        if (simmode->getApiProvider()->hasDefaultVehicle()) {
+            simmode->toggleRecording();
+        }
+    }
 }
 
 void ASimHUD::inputEventToggleRecording()
@@ -80,8 +100,12 @@ void ASimHUD::inputEventToggleRecording()
 
 void ASimHUD::inputEventToggleReport()
 {
-    simmode_->EnableReport = !simmode_->EnableReport;
-    widget_->setReportVisible(simmode_->EnableReport);
+    // simmode_->EnableReport = !simmode_->EnableReport;
+    // widget_->setReportVisible(simmode_->EnableReport);
+    for (auto simmode : simmodes_) {
+        simmode->EnableReport = !simmode->EnableReport;
+        widget_->setReportVisible(simmode->EnableReport);
+    }
 }
 
 void ASimHUD::inputEventToggleHelp()
@@ -91,7 +115,10 @@ void ASimHUD::inputEventToggleHelp()
 
 void ASimHUD::inputEventToggleTrace()
 {
-    simmode_->toggleTraceAll();
+    // simmode_->toggleTraceAll();
+    for (auto simmode : simmodes_) {
+        simmode->toggleTraceAll();
+    }
 }
 
 void ASimHUD::updateWidgetSubwindowVisibility()
@@ -175,8 +202,13 @@ void ASimHUD::createMainWidget()
 
     //synchronize PIP views
     widget_->initializeForPlay();
-    if (simmode_)
-        widget_->setReportVisible(simmode_->EnableReport);
+    // if (simmode_)
+    //     widget_->setReportVisible(simmode_->EnableReport);
+    // ToDo - alon - is it right?
+    for (auto simmode : simmodes_) {
+        if (simmode)
+            widget_->setReportVisible(simmode->EnableReport);
+    }
     widget_->setOnToggleRecordingHandler(std::bind(&ASimHUD::toggleRecordHandler, this));
     widget_->setRecordButtonVisibility(AirSimSettings::singleton().is_record_ui_visible);
     updateWidgetSubwindowVisibility();
@@ -248,10 +280,12 @@ std::string ASimHUD::getSimModeFromUser()
     if (EAppReturnType::No == UAirBlueprintLib::ShowMessage(EAppMsgType::YesNo,
                                                             "Would you like to use car simulation? Choose no to use quadrotor simulation.",
                                                             "Choose Vehicle")) {
-        return AirSimSettings::kSimModeTypeMultirotor;
+        // return AirSimSettings::kSimModeTypeMultirotor;
+        return AirSimSettings::kVehicleTypeSimpleFlight;
     }
     else
-        return AirSimSettings::kSimModeTypeCar;
+        // return AirSimSettings::kSimModeTypeCar;
+        return AirSimSettings::kVehicleTypePhysXCar;
 }
 
 void ASimHUD::loadLevel()
@@ -259,54 +293,92 @@ void ASimHUD::loadLevel()
     UAirBlueprintLib::RunCommandOnGameThread([&]() { this->map_changed_ = UAirBlueprintLib::loadLevel(this->GetWorld(), FString(AirSimSettings::singleton().level_name.c_str())); }, true);
 }
 
-void ASimHUD::createSimMode()
+// void ASimHUD::createSimMode()
+void ASimHUD::createAllSimModes()
 {
-    std::string simmode_name = AirSimSettings::singleton().simmode_name;
+    // std::string simmode_name = AirSimSettings::singleton().simmode_name;
 
     FActorSpawnParameters simmode_spawn_params;
     simmode_spawn_params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
+    simmodes_.SetNum(3);
     //spawn at origin. We will use this to do global NED transforms, for ex, non-vehicle objects in environment
-    if (simmode_name == AirSimSettings::kSimModeTypeMultirotor)
-        simmode_ = this->GetWorld()->SpawnActor<ASimModeWorldMultiRotor>(FVector::ZeroVector,
-                                                                         FRotator::ZeroRotator,
-                                                                         simmode_spawn_params);
-    else if (simmode_name == AirSimSettings::kSimModeTypeCar)
-        simmode_ = this->GetWorld()->SpawnActor<ASimModeCar>(FVector::ZeroVector,
+    // if (simmode_name == AirSimSettings::kSimModeTypeMultirotor)
+    //     simmode_ = this->GetWorld()->SpawnActor<ASimModeWorldMultiRotor>(FVector::ZeroVector,
+    //                                                                      FRotator::ZeroRotator,
+    //                                                                      simmode_spawn_params);
+    // else if (simmode_name == AirSimSettings::kSimModeTypeCar)
+    //     simmode_ = this->GetWorld()->SpawnActor<ASimModeCar>(FVector::ZeroVector,
+    simmodes_[0] = this->GetWorld()->SpawnActor<ASimModeWorldMultiRotor>(FVector::ZeroVector, FRotator::ZeroRotator, simmode_spawn_params);
+    simmodes_[1] = this->GetWorld()->SpawnActor<ASimModeCar>(FVector::ZeroVector,
                                                              FRotator::ZeroRotator,
                                                              simmode_spawn_params);
-    else if (simmode_name == AirSimSettings::kSimModeTypeComputerVision)
-        simmode_ = this->GetWorld()->SpawnActor<ASimModeComputerVision>(FVector::ZeroVector,
+    // else if (simmode_name == AirSimSettings::kSimModeTypeComputerVision)
+    //     simmode_ = this->GetWorld()->SpawnActor<ASimModeComputerVision>(FVector::ZeroVector,
+    simmodes_[2] = this->GetWorld()->SpawnActor<ASimModeComputerVision>(FVector::ZeroVector,
                                                                         FRotator::ZeroRotator,
                                                                         simmode_spawn_params);
-    else {
-        UAirBlueprintLib::ShowMessage(EAppMsgType::Ok, std::string("SimMode is not valid: ") + simmode_name, "Error");
-        UAirBlueprintLib::LogMessageString("SimMode is not valid: ", simmode_name, LogDebugLevel::Failure);
-    }
+    // else {
+    //     UAirBlueprintLib::ShowMessage(EAppMsgType::Ok, std::string("SimMode is not valid: ") + simmode_name, "Error");
+    //     UAirBlueprintLib::LogMessageString("SimMode is not valid: ", simmode_name, LogDebugLevel::Failure);
+    // }
 }
 
 void ASimHUD::initializeSubWindows()
 {
-    if (!simmode_)
-        return;
+    // if (!simmode_)
+    //     return;
 
-    auto default_vehicle_sim_api = simmode_->getVehicleSimApi();
+    // auto default_vehicle_sim_api = simmode_->getVehicleSimApi();
 
-    if (default_vehicle_sim_api) {
-        auto camera_count = default_vehicle_sim_api->getCameraCount();
+    // if (default_vehicle_sim_api) {
+    //     auto camera_count = default_vehicle_sim_api->getCameraCount();
 
-        //setup defaults
-        if (camera_count > 0) {
-            subwindow_cameras_[0] = default_vehicle_sim_api->getCamera("");
-            subwindow_cameras_[1] = default_vehicle_sim_api->getCamera(""); //camera_count > 3 ? 3 : 0
-            subwindow_cameras_[2] = default_vehicle_sim_api->getCamera(""); //camera_count > 4 ? 4 : 0
+    //     //setup defaults
+    //     if (camera_count > 0) {
+    //         subwindow_cameras_[0] = default_vehicle_sim_api->getCamera("");
+    //         subwindow_cameras_[1] = default_vehicle_sim_api->getCamera(""); //camera_count > 3 ? 3 : 0
+    //         subwindow_cameras_[2] = default_vehicle_sim_api->getCamera(""); //camera_count > 4 ? 4 : 0
+    //     }
+    int default_simmode_index = -1;
+    for (auto simmode : simmodes_) {
+        default_simmode_index++;
+
+        // find the first vehicle from the settings and its corresponding simmode
+        if (simmode->getApiProvider()->hasDefaultVehicle() && simmode->isVehicleTypeSupported(AirSimSettings::singleton().getFirstVehicleSetting()->vehicle_type)) {
+            const auto& default_vehicle_sim_api = simmode->getVehicleSimApi();
+            auto camera_count = default_vehicle_sim_api->getCameraCount();
+
+            //setup defaults
+            if (camera_count > 0) {
+                subwindow_cameras_[0] = default_vehicle_sim_api->getCamera("");
+                subwindow_cameras_[1] = default_vehicle_sim_api->getCamera(""); //camera_count > 3 ? 3 : 0
+                subwindow_cameras_[2] = default_vehicle_sim_api->getCamera(""); //camera_count > 4 ? 4 : 0
+            }
+            else
+                subwindow_cameras_[0] = subwindow_cameras_[1] = subwindow_cameras_[2] = nullptr;
+
+            break;
         }
-        else
-            subwindow_cameras_[0] = subwindow_cameras_[1] = subwindow_cameras_[2] = nullptr;
+        // else
+        //     subwindow_cameras_[0] = subwindow_cameras_[1] = subwindow_cameras_[2] = nullptr;
     }
 
     for (const auto& setting : getSubWindowSettings()) {
-        APIPCamera* camera = simmode_->getCamera(msr::airlib::CameraDetails(setting.camera_name, setting.vehicle_name, setting.external));
+        // APIPCamera* camera = simmode_->getCamera(msr::airlib::CameraDetails(setting.camera_name, setting.vehicle_name, setting.external));
+        APIPCamera* camera = nullptr;
+        if (setting.vehicle_name.empty()) {
+            // vehicle_name not specified - use the default simmode
+            camera = simmodes_[default_simmode_index]->getCamera(msr::airlib::CameraDetails(setting.camera_name, setting.vehicle_name, setting.external));
+        }
+        else {
+            // vehicle_name specified - find in which simmode and break in case it was found
+            for (auto simmode : simmodes_) {
+                if (simmode->getVehicleSimApi(setting.vehicle_name)) {
+                    camera = simmode->getCamera(msr::airlib::CameraDetails(setting.camera_name, setting.vehicle_name, setting.external));
+                    break;
+                }
+            }
+        }
         if (camera)
             subwindow_cameras_[setting.window_index] = camera;
         else

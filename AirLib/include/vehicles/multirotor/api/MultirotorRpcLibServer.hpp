@@ -17,7 +17,8 @@ namespace airlib
     class MultirotorRpcLibServer : public RpcLibServerBase
     {
     public:
-        MultirotorRpcLibServer(ApiProvider* api_provider, string server_address, uint16_t port = RpcLibPort);
+        // MultirotorRpcLibServer(ApiProvider* api_provider, string server_address, uint16_t port = RpcLibPort);
+        MultirotorRpcLibServer(ApiProvider* api_provider, string server_address, uint16_t port = RpcLibPortMultirotor);
         virtual ~MultirotorRpcLibServer();
 
     protected:
